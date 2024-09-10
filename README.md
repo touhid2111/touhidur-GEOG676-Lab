@@ -7,7 +7,7 @@ Name: MD TOUHIDUR RAHMAN MAZUMDER
 
 
 |labs|
-|[Lab 1](labs/lab1)
+|[Lab 1](labs/)
 
 
 
