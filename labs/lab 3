@@ -1,8 +1,6 @@
 import os
 import geopandas as gpd
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, 'data')
+DATA_DIR = "drive/MyDrive/Data/"
 
 class CensusTract:
     def __init__(self, geoid, population, geometry):
@@ -12,7 +10,11 @@ class CensusTract:
     
     def calculate_population_density(self):
         # calculate the population density based on geometry
-        ### >>>>>>>>>>>> YOUR CODE HERE <<<<<<<<<<< ###
+        area_new = self.geometry.area   
+        if area_new > 0:
+            population_density = self.population / area_new
+        else:
+            population_density = 0
         
         return population_density
         ### <<<<<<<<<<< END OF YOUR CODE <<<<<<<<<<< ###
@@ -32,10 +34,12 @@ if __name__ == "__main__":
     # instantiate the CensusTract class
 
     # calculate the population density for each census tract
-
+def calculate_density_for_tract(row):
+        # Instantiate the CensusTract class for each row
+        tract = CensusTract(geoid=row['GeoId'], population=row['Pop'], geometry=row['geometry'])
+        return tract.calculate_population_density()
     # create a new column for the population density and name it as 'Pop_Den_new'
-
+gdf['Pop_Den_new'] = gdf.apply(calculate_density_for_tract, axis=1)
     ### <<<<<<<<<<< END OF YOUR CODE <<<<<<<<<<< ###
-
-    # preview the data again
-    print(gdf.head())
+# preview the data again
+print(gdf.head())
