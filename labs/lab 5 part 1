@@ -1,1 +1,114 @@
+import arcpy
+import os
 
+# Enable overwriting outputs
+arcpy.env.overwriteOutput = True
+
+# Define paths
+output_folder = r"C:\Users\sakib\24 Fall\touhidur-GEOG676-Lab\labs\Lab5\Output2"
+gdb_name = "garages.gdb"
+
+# Create geodatabase
+GDB_Full_Path = os.path.join(output_folder, gdb_name)
+if not arcpy.Exists(GDB_Full_Path):
+    arcpy.management.CreateFileGDB(output_folder, gdb_name)
+
+# Path to CSV file
+csv_path = r"C:\Users\sakib\24 Fall\touhidur-GEOG676-Lab\labs\Lab5\garages.csv"
+
+# Define fields for coordinates and spatial reference
+x_field = "X"  # Longitude field in the CSV file
+y_field = "Y"  # Latitude field in the CSV file
+spatial_reference = arcpy.SpatialReference(4326)  # WGS 1984
+
+try:
+    Create XY Event Layer
+    garages_layer = "Garages_Layer"
+    arcpy.management.MakeXYEventLayer(
+        table=csv_path,
+        in_x_field=x_field,
+        in_y_field=y_field,
+        out_layer=garages_layer,
+        spatial_reference=spatial_reference
+    )
+    print("XY Event Layer created successfully.")
+
+    # Save the XY Event Layer to a feature class
+    output_feature_class = os.path.join(GDB_Full_Path, "Garages")
+    arcpy.management.CopyFeatures(garages_layer, output_feature_class)
+    print(f"Feature class saved to geodatabase: {output_feature_class}")
+
+except arcpy.ExecuteError as e:
+    print(f"ArcPy error occurred: {e}")
+except Exception as ex:
+    print(f"Unexpected error: {ex}")
+
+campusGDB = r"C:\Users\sakib\24 Fall\touhidur-GEOG676-Lab\labs\Lab5\Campus.gdb"
+
+#PREPARATION
+# UserInputs and Initializations
+garagename = input("Garage Name: ")
+bufferRad = (input("Buffer Radius (meters): "))
+structures = campusGDB + "/Structures"
+where_clause = "LotName = '%s'" % garagename
+try:
+    # Search Cursor to validate garage
+    cursor = arcpy.da.SearchCursor(output_feature_class, ["LotName"])
+    shouldProceed = False
+
+    for row in cursor:
+        if garagename in row:
+            shouldProceed = True
+            break
+
+    del cursor  # Release the cursor resource
+
+    if shouldProceed:
+        print(f"Garage '{garagename}' found. Proceeding with analysis...")
+    else:
+        print(f"Error: The garage '{garagename}' does not exist.")
+        exit(1)
+
+    # Select the garage
+    selected_garage_layer_name = os.path.join(GDB_Full_Path, "Selected_Garage")
+    if arcpy.Exists(selected_garage_layer_name):
+        arcpy.management.Delete(selected_garage_layer_name)
+
+    garage_feature = arcpy.analysis.Select(
+        in_features=output_feature_class,
+        out_feature_class=selected_garage_layer_name,
+        where_clause=where_clause
+    )
+    print(f"Selection completed: {selected_garage_layer_name}")
+
+    # Buffer the selected garage
+    garage_buff_name = os.path.join(GDB_Full_Path, "Garage_Buffered")
+    if arcpy.Exists(garage_buff_name):
+        arcpy.management.Delete(garage_buff_name)
+
+    arcpy.analysis.Buffer(
+        in_features=garage_feature,
+        out_feature_class=garage_buff_name,
+        buffer_distance_or_field=bufferRad
+    )
+    print(f"Buffering completed: {garage_buff_name}")
+
+    # Clip the structures with the buffer
+    clipped_structures_name = os.path.join(GDB_Full_Path, "Clipped_Structures")
+    if arcpy.Exists(clipped_structures_name):
+        arcpy.management.Delete(clipped_structures_name)
+
+    arcpy.analysis.Clip(
+        in_features=structures,
+        clip_features=garage_buff_name,
+        out_feature_class=clipped_structures_name
+    )
+    print(f"Clipping completed: {clipped_structures_name}")
+
+    print("Analysis completed successfully!")
+
+except arcpy.ExecuteError as e:
+    print(f"ArcPy error occurred: {e}")
+except Exception as ex:
+    print(f"Unexpected error: {ex}")
+ 
