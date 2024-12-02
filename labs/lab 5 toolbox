@@ -1,1 +1,179 @@
+# -*- coding: utf-8 -*-
+
+import arcpy
+import os
+
+class Toolbox(object):
+    def __init__(self):
+        """Define the toolbox (the name of the toolbox is the name of the .pyt file)."""
+        self.label = "Lab5_Toolbox"
+        self.alias = "Lab5_Toolbox"
+        # List of tool classes associated with this toolbox
+        self.tools = [Lab5_Tool]
+
+
+class Lab5_Tool(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Lab5_Tool"
+        self.description = "Tool for selecting, buffering, and clipping a garage feature"
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        param_GDB_folder = arcpy.Parameter(
+            displayName="GDB Folder",
+            name="gdbfolder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input"
+        )
+        param_GDB_Name = arcpy.Parameter(
+            displayName="GDB Name",
+            name="gdbname",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input"
+        )
+        param_CSV_File = arcpy.Parameter(
+            displayName="Garage CSV File",
+            name="csvfile",
+            datatype="DEFile",
+            parameterType="Required",
+            direction="Input"
+        )
+        param_Garage_Layer_Name = arcpy.Parameter(
+            displayName="Garage Layer Name",
+            name="garagelayer",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input"
+        )
+        param_Campus_GDB = arcpy.Parameter(
+            displayName="Campus GDB",
+            name="campusgdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input"
+        )
+        param_Selected_Garage_Name = arcpy.Parameter(
+            displayName="Selected Garage Name",
+            name="selectedgarage",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input"
+        )
+        param_Buffer_Radius = arcpy.Parameter(
+            displayName="Buffer Radius",
+            name="bufferradius",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        params = [
+            param_GDB_folder,
+            param_GDB_Name,
+            param_CSV_File,
+            param_Garage_Layer_Name,
+            param_Campus_GDB,
+            param_Selected_Garage_Name,
+            param_Buffer_Radius,
+        ]
+        return params
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Query user input
+        GDB_Folder = parameters[0].valueAsText
+        GDB_Name = parameters[1].valueAsText
+        Garage_CSV_File = parameters[2].valueAsText
+        Garage_Layer_Name = parameters[3].valueAsText
+        Campus_GDB = parameters[4].valueAsText
+        Selected_Garage_Name = parameters[5].valueAsText
+        Buffer_Radius = parameters[6].valueAsText
+
+        try:
+            # Create geodatabase
+            GDB_Full_Path = os.path.join(GDB_Folder, GDB_Name)
+            if not arcpy.Exists(GDB_Full_Path):
+                arcpy.management.CreateFileGDB(GDB_Folder, GDB_Name)
+
+            # Create XY Event Layer
+            garages_layer = Garage_Layer_Name
+            arcpy.management.MakeXYEventLayer(
+                table=Garage_CSV_File,
+                in_x_field="X",
+                in_y_field="Y",
+                out_layer=garages_layer,
+                spatial_reference=arcpy.SpatialReference(4326)
+            )
+            messages.addMessage("XY Event Layer created successfully.")
+
+            # Save the XY Event Layer to a feature class
+            output_feature_class = os.path.join(GDB_Full_Path, "Garages")
+            arcpy.management.CopyFeatures(garages_layer, output_feature_class)
+            messages.addMessage(f"Feature class saved to geodatabase: {output_feature_class}")
+
+            # Search Cursor to validate garage
+            structures = os.path.join(Campus_GDB, "Structures")
+            where_clause = f"LotName = '{Selected_Garage_Name}'"
+            cursor = arcpy.da.SearchCursor(output_feature_class, ["LotName"])
+            shouldProceed = False
+
+            for row in cursor:
+                if Selected_Garage_Name in row:
+                    shouldProceed = True
+                    break
+
+            del cursor  # Release the cursor resource
+
+            if not shouldProceed:
+                messages.addErrorMessage(f"Error: The garage '{Selected_Garage_Name}' does not exist.")
+                return
+
+            messages.addMessage(f"Garage '{Selected_Garage_Name}' found. Proceeding with analysis...")
+
+            # Select the garage
+            selected_garage_layer_name = os.path.join(GDB_Full_Path, "Selected_Garage")
+            if arcpy.Exists(selected_garage_layer_name):
+                arcpy.management.Delete(selected_garage_layer_name)
+
+            garage_feature = arcpy.analysis.Select(
+                in_features=output_feature_class,
+                out_feature_class=selected_garage_layer_name,
+                where_clause=where_clause
+            )
+            messages.addMessage(f"Selection completed: {selected_garage_layer_name}")
+
+            # Buffer the selected garage
+            garage_buff_name = os.path.join(GDB_Full_Path, "Garage_Buffered")
+            if arcpy.Exists(garage_buff_name):
+                arcpy.management.Delete(garage_buff_name)
+
+            arcpy.analysis.Buffer(
+                in_features=garage_feature,
+                out_feature_class=garage_buff_name,
+                buffer_distance_or_field=Buffer_Radius
+            )
+            messages.addMessage(f"Buffering completed: {garage_buff_name}")
+
+            # Clip the structures with the buffer
+            clipped_structures_name = os.path.join(GDB_Full_Path, "Clipped_Structures")
+            if arcpy.Exists(clipped_structures_name):
+                arcpy.management.Delete(clipped_structures_name)
+
+            arcpy.analysis.Clip(
+                in_features=structures,
+                clip_features=garage_buff_name,
+                out_feature_class=clipped_structures_name
+            )
+            messages.addMessage(f"Clipping completed: {clipped_structures_name}")
+
+            messages.addMessage("Analysis completed successfully!")
+
+        except arcpy.ExecuteError as e:
+            messages.addErrorMessage(f"ArcPy error occurred: {e}")
+        except Exception as ex:
+            messages.addErrorMessage(f"Unexpected error: {ex}")
 
