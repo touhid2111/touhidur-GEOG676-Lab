@@ -1,1 +1,49 @@
+##### INITIALIZE #####
+import arcpy
 
+arcpy.env.overwriteOutput = True
+
+
+path = r"C:\Users\sakib\OneDrive\Documents\ArcGIS\Projects\MyProject31\MyProject31.aprx"
+
+p = arcpy.mp.ArcGISProject(path) #Create Project Object
+m = p.listMaps('Map')[0] #Create Map Object
+lyrs = m.listLayers() #Create layers
+
+#Retrieve User Input
+userIn = input("Unique Values or Graduated Color Map? (U or G): ")
+
+##### ENSURE / EXECUTION #####
+#Iterate through layers to change symbology
+for layer in lyrs:
+    #Ensure layer is FEATURE layer
+    if layer.isFeatureLayer == True:
+        #Ensure layer is Structures
+        if layer.name.lower() == "Structures".lower():
+            sym = layer.symbology
+            #Ensure renderer attribute
+            if hasattr(sym,"renderer") == True:
+                 
+                ### IF GRADUATED COLORS ###
+                if userIn == "G":
+                    sym.updateRenderer("GraduatedColorsRenderer")
+                    #Attribute that will differentiate items
+                    sym.renderer.classificationField = "Shape_Area"
+                    #Set bins
+                    sym.renderer.breakCount = 5
+                    #Set color ramp
+                    sym.renderer.colorRamp = p.listColorRamps("Yellow to Red") [0]
+                
+                ### IF UNIQUE VALUES ###
+                elif userIn == "U":
+                    sym.updateRenderer("UniqueValueRenderer")
+                    #Attribute that will differentiate items
+                    sym.renderer.fields = ["Name"]
+
+                #Set actual symbology = copy's
+                layer.symbology = sym
+            else:
+                print("Not Structures")
+
+p.saveACopy(r"C:\Users\sakib\OneDrive\Documents\ArcGIS\Projects\MyProject31\MyProject31_new.aprx"G)
+print("Complete")
