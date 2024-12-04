@@ -1,0 +1,27 @@
+import arcpy
+import os
+arcpy.CheckOutExtension("Spatial")
+arcpy.env.workspace = r"C:\Users\sakib\Downloads\Lab7Data"
+arcpy.env.overwriteOutput = True
+# File Source
+source = r"C:\Users\sakib\Downloads\Lab7Data"
+# Composite Bands
+band1 = arcpy.sa.Raster(source + "\LT05_L2SP_026039_20110803_20200820_02_T1_SR_B1.TIF") # Blue
+band2 = arcpy.sa.Raster(source + "\LT05_L2SP_026039_20110803_20200820_02_T1_SR_B2.TIF") # Green
+band3 = arcpy.sa.Raster(source + "\LT05_L2SP_026039_20110803_20200820_02_T1_SR_B3.TIF") # Red
+band4 = arcpy.sa.Raster(source + "\LT05_L2SP_026039_20110803_20200820_02_T1_SR_B4.TIF") # IR
+outRas = source + "\landsat_out.TIF"
+arcpy.management.CompositeBands([band3, band2, band1],outRas)
+band_NDVI = ((band4 - band3) / (band4 + band3)) * 100 + 100
+band_NDVI.save(f"{source}\\NDVI_out.TIF")
+#DEM
+dem1 = arcpy.sa.Raster(r"C:\Users\sakib\Downloads\Lab7Data\n30_w097_1arc_v3.TIF")
+# Hillshade
+# shadows = "NO_SHADOWS", z factor = 1"
+hs1 = arcpy.sa.Hillshade(dem1,315,45,"NO_SHADOWS",1)
+hs1.save(f"{source}\\hs_out.TIF")
+# Slope
+# Output_measurement = DEGREE, z_factor = 1
+slope = arcpy.sa.Slope(dem1,"DEGREE",1,)
+slope.save(f"{source}\\slope_out.TIF")
+print("Program Run Complete")
